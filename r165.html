@@ -1,0 +1,372 @@
+<html>
+<head>
+<title>Gakken GMC-4 / R-165 / Radio Shack Science Fair Microcomputer Trainer Assembler</title>
+</head>
+ Source code:<br/>
+ <textarea id="source" cols=50 rows=30></textarea><br>
+ <br/>
+ <button onclick="assembleIt()">Assemble (&darr;)</button>
+ <button onclick="disassembleIt()">Disassemble (&uarr;)</button>
+ <br/><br/>
+ Machine code: <input id="mc" size=80></textarea><br>
+<br>
+<p>
+<h2>Example:</h2>
+<pre>
+START: TIA F ; put F into A register
+ AO           ; display value of A register
+ CAL SHTS     ; play short beep (can omit "CAL")
+ JUMP START   ; restart if flag set
+ JUMP #02     ; go to third nibble in code (flag was set by first JUMP)
+</pre>
+</p>
+<p>
+<p>
+<h2>Quick Reference:</h2>
+<p>All opcodes set flag except in the circumstances mentioned.</p>
+<p>Source here.</p>
+<ul>
+<li><code>KA</code> (0): hex key&rarr;Ar and flag clear if hex key pressed</li>
+<li><code>AO</code> (1): display Ar on 7-seg LED</li>
+<li><code>CH</code> (2): Ar&harr;Br, Y&harr;Z</li>
+<li><code>CY</code> (3): Ar&harr;Yr</li>
+<li><code>AM</code> (4): Ar&rarr;[50+Yr]</li>
+<li><code>MA</code> (5): [50+Yr]&rarr;Ar</li>
+<li><code>M+</code> (6): [50+Yr]+A&rarr;Ar; flag clear if no overflow</li>
+<li><code>M-</code> (7): [50+Yr]-A&rarr;Ar; flag clear if no underflow</li>
+<li><code>TIA x</code> (8x): x&rarr;Ar (immediate x)</li>
+<li><code>AIA x</code> (9x): Ar+x&rarr;Ar (immediate x); flag clear if no overflow</li>
+<li><code>TIY x</code> (Ax): x&rarr;Y (immediate x)</li>
+<li><code>AIY x</code> (Bx): Ar+x&rarr;Yr (immediate x); flag clear if no overflow</li>
+<li><code>CIA x</code> (Cx): flag clear if x=Ar (immediate x)</li>
+<li><code>CIY x</code> (Dx): flag clear if x=Yr (immediate x)</li>
+<li><code>JUMP xy</code> (Fxy): jump to xy if flag set</li>
+<li><code>CAL RSTO</code> (E0): clear 7-seg LED</li>
+<li><code>CAL SETR</code> (E1): turn on LED #Yr</li>
+<li><code>CAL RSTR</code> (E2): turn off LED #Yr</li>
+<li><code>CAL CMPL</code> (E4): bitwise complement Ar</li>
+<li><code>CAL CHNG</code> (E5): Ar/Br/Yr/Zr&harr;A'r/B'r/Y'r/Z'r</li>
+<li><code>CAL SIFT</code> (E6): right shift Ar; flag clear if Ar was odd (!)</li>
+<li><code>CAL ENDS</code> (E7): end sound</li>
+<li><code>CAL ERRS</code> (E8): error sound</li>
+<li><code>CAL SHTS</code> (E9): short sound</li>
+<li><code>CAL LONS</code> (EA): long sound</li>
+<li><code>CAL SUND</code> (EB): play note in Ar (from 1 to E)</li>
+<li><code>CAL TIMR</code> (EC): delay (Ar+1)*0.1 sec.</li>
+<li><code>CAL DSPR</code> (ED): display [5F][5E] on the LEDs</li>
+<li><code>CAL DEM-</code> (EE): <a href="http://xl.cocolog-nifty.com/blog/2009/07/gmc-4-no-9829.html">decimal subtraction</a></li>
+<li><code>CAL DEM+</code> (EF): <a href="http://xl.cocolog-nifty.com/blog/2009/07/gmc-4-no-9829.html">decimal addition</a></li>
+</ul>
+</body>
+<script type="text/javascript">
+function hex1(x) {
+    return (x&0xF).toString(16).toUpperCase()
+}
+
+function hex2(x) {
+    return hex1(x>>4)+hex1(x)
+}
+
+function parseHex1(x,strict=false) {
+    var sign = 1
+    if (!strict) {
+        if (x.length > 1 && x[0] == '#') {
+            x = x.substr(1)
+        }
+        if (x.length > 1 && x[0] == '-') {
+            sign = -1
+            x = x.substr(1)
+        }
+    }
+    if (x.length == 1 && ('0'<=x && x<='9') || ('a' <= x && x <= 'f') || ('A' <= x && x <= 'F'))
+        return sign * parseInt("0x"+x)
+    else {
+        return null
+        }
+}
+
+function parseHex2(x) {
+    if (x.length == 1) {
+        return parseHex1(x,strict=true)
+    }
+    else if (x.length == 2) {
+        var a = parseHex1(x[0],strict=true)
+        if (a === null) {
+            return null
+        }
+        var b = parseHex2(x[1],strict=true)
+        if (b === null) {
+            return null
+        }
+        return (a<<4)|b
+    }
+    else {
+        return null
+    }
+}
+
+var extended = { rsto: "0", setr: "1", rstr: "2", cmpl: "4", chng: "5", sift: "6", ends: "7",
+                 errs: "8", shts: "9", lons: "A", sund: "B", timr: "C", dspr: "D", "dem-": "E", "dem+": "F" }
+var noArgs = { 'ka': '0', 'ao': '1', 'ch': '2', 'cy': '3', 'am': '4', 'ma': '5', 'm+': '6', 'm-': '7' }
+var immediate = { 'tia': '8', 'aia': '9', 'tiy': 'A', 'aiy': 'B', 'cia': 'C', 'ciy': 'D' }
+
+function assemble(input, output) {
+    var labels = {}
+    var lines = input.split(/[\r\n]+/)
+    output.value = ""
+    var out = ""
+    
+    for (var i=0; i<lines.length; i++) {
+        err = function(msg) {
+            alert(msg+" ["+lines[i]+"]")
+        }
+    
+        var line = lines[i].replace(/;.*/,"").trim()
+        if (line == "")
+            continue
+        var tokens = line.split(/\s+/)
+        if (tokens.length == 0)
+            continue
+        var pos = 0
+        
+        while (pos < tokens.length && tokens[pos].endsWith(":")) {
+            var label = tokens[0].substr(0,tokens[0].length-1)
+            var targetPos = out.length
+            if (label in labels) {
+                labels[label].target = targetPos
+                refs = labels[label].refs
+                for (var j = 0 ; j < refs.length ; j++) {
+                    var r = refs[j]
+                    out = out.substr(0,r)+hex2(targetPos)+out.substr(r+2)
+                }
+                labels[label].refs = []
+            }
+            else {
+                labels[label] = { target: targetPos, refs: [] }
+            }
+            pos++
+        }
+        
+        if (pos < tokens.length) {
+            var token = tokens[pos].toLowerCase()
+            if (token in noArgs) {
+                out += noArgs[token]
+            }
+            else if (token in immediate) {
+                if (pos + 1 >= tokens.length) {
+                    err(token+" needs value")
+                    return
+                }
+                out += immediate[token]
+                var x = parseHex1(tokens[pos+1])
+                if (x === null) {
+                    err("invalid hex constant")
+                    return
+                }
+                out += hex1(x)
+            }
+            else if (token == 'cal') {
+                if (pos + 1 >= tokens.length || !(tokens[pos+1].toLowerCase() in extended)) {
+                    err("CAL needs valid extended code")
+                    return
+                }
+                out += "E" + extended[tokens[pos+1].toLowerCase()]
+            }
+            else if (token == 'jump') {
+                if (pos + 1 >= tokens.length) {
+                    err("JUMP needs target")
+                    return
+                }
+                target = tokens[pos+1]
+                out += "F"
+                var targetPos
+                if (target[0] == '#') {
+                    targetPos = parseHex2(target.substr(1))
+                    if (targetPos === null) {
+                        err("Invalid hex constant")
+                        return
+                    }
+                }
+                else {
+                    if (target in labels) {
+                        if ("target" in labels[target]) {
+                            targetPos = labels[target].target
+                        }
+                        else {
+                            targetPos = parseHex2(target)
+                            labels[target].refs.push(out.length)
+                        }
+                    }
+                    else {
+                        targetPos = parseHex2(target)
+                        labels[target] = { refs: [out.length] }
+                    }
+                }
+                out += hex2(targetPos===null?0:targetPos)
+            }
+            else if (token == 'data') {
+                var data = tokens.slice(pos+1).join(" ").split(/\s*,?\s*|\s+/)
+                for (var j=0; j<data.length; j++) {
+                    var h = parseHex1(data[j])
+                    if (h===null) {
+                        err("unrecognized hex constant")
+                        return
+                    }
+                    out += hex1(h)
+                }
+            }
+            else if (token in extended) {
+                out += "E" + extended[token]
+                break
+            }
+            else {
+                err("unrecognized opcode")
+                return
+            }
+        }
+    }
+    for (var label in labels) {
+        if (labels[label].refs.length && parseHex2(label)===null) {
+            alert("Unresolved label "+label)
+        }
+    }
+    output.value=out
+    output.select()
+}
+
+function find(value, dict) {
+    for (var key in dict) {
+        if (dict.hasOwnProperty(key) && dict[key] == value)
+            return key
+    }
+    return null
+}
+
+function disassemble(mc, source) {
+    var code = mc.replaceAll(/[\s,]/g,'').trim().toUpperCase()
+    var pos = 0
+    var out = ""
+    var labels = {}
+    function getLabel(x) {
+        if (x in labels) 
+            return labels[x]
+        else
+            return '#'+hex2(x)
+    }
+    while(pos < code.length) {
+        if (null == parseHex1(code[pos],strict=true)) {
+            alert("Invalid hex digit")
+            return
+        }
+        if (code[pos] == 'E') {
+            pos+=2
+        }
+        else if (code[pos] == 'F') {
+            if (pos + 2 < code.length) {
+                target = parseHex2(code.substr(pos+1,2))
+                if (target <= code.length && !(target in labels)) 
+                    labels[target] = 'lbl'+Object.getOwnPropertyNames(labels).length
+            }
+            pos+=3
+        }
+        else {
+            pos++
+        }
+    }
+    pos = 0
+    while(pos < code.length) {
+        if (pos in labels) {
+            out += labels[pos]+":\n"
+        }
+        var instruction = null
+        var length = 0
+        if (code[pos] == 'E') {
+            if (pos + 1 < code.length) {
+                var ext = find(code[pos+1], extended)
+                if ((pos + 1) in labels) {
+                    out += "  DATA E\n" +
+                           labels[pos+1]+":\n" +
+                           "  DATA " + code[pos+1]
+                    if (ext !== null)
+                        out += ' ; CAL '+ext.toUpperCase()
+                    out += '\n'
+                }
+                else {
+                    if (ext !== null)
+                        out += '  CAL '+ext.toUpperCase()+'\n'
+                    else
+                        out += '  DATA E,'+code[pos+1]+'\n'
+                }
+            }
+            else {
+                out += '  DATA E\n'
+            }
+            pos+=2
+        }
+        else if (code[pos] == 'F') {
+            if (pos + 2 < code.length) {
+                if ((pos+1) in labels || (pos+2) in labels) {
+                    out += "  DATA F\n"
+                    if ((pos+1) in labels) 
+                        out += labels[pos+1]+":\n" 
+                    out += "  DATA " + code[pos+1] + "\n"
+                    if ((pos+2) in labels) 
+                        out += labels[pos+2]+":\n"
+                    out += "  DATA " + code[pos+2] +" ; JUMP " + getLabel(parseHex2(code.substr(pos+1,2))) + "\n"
+                }
+                else {
+                    out += "  JUMP " + getLabel(parseHex2(code.substr(pos+1,2))) + "\n"
+                }
+            }
+            else if (pos + 1 < code.length) {
+                out += "  DATA F\n"
+                if ((pos+1) in labels) 
+                    out += labels[pos+1]+":\n" 
+                out += "  DATA " + code[pos+1] + "\n"
+            }
+            else {
+                out += "  DATA F\n"
+            }
+            pos += 3
+        }
+        else {
+            var op = find(code[pos], immediate) 
+            if (op != null) {
+                if (pos + 1 >= code.length) {
+                    out += "  DATA "+code[pos]
+                }
+                else {
+                    instruction = op.toUpperCase()+" "+code[pos+1]
+                    if ((pos+1) in labels) {
+                        out += "  DATA "+code[pos]+"\n"+labels[pos+1]+":\n  DATA "+code[pos+1]+" ; "+instruction+"\n"
+                    }
+                    else {
+                        out += "  " + instruction+"\n"
+                    }
+                }
+                pos += 2
+            }
+            else {
+                out += "  " + find(code[pos], noArgs).toUpperCase() + "\n"
+                pos++
+            }
+        }
+    }
+    if (code.length in labels) 
+        out += labels[code.length] + ":\n"
+    source.value=out
+}
+
+function assembleIt() {
+    assemble(document.getElementById('source').value, document.getElementById('mc'))
+}
+
+function disassembleIt() {
+    if (document.getElementById('source').value.length) {
+        if (!confirm("Clear assembly source?"))
+            return
+    }
+    disassemble(document.getElementById('mc').value, document.getElementById('source'))
+}
+</script>
+</html>
