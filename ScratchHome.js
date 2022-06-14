@@ -7,7 +7,21 @@ class ScratchHome {
         return {
             "id": "ScratchHome",
             "name": "ScratchHome",
-            "blocks": [
+            "blocks": [ {
+                            "opcode": "setColor",
+                            "blockType": "command",
+                            "text": "colorer [object] en [colorList] ",
+                            "arguments": {
+                                "object": {
+                                    "type": "string",
+                                    "defaultValue": "Lit bébé(827158385)"
+                                },
+                                "colorList": {
+                                    "type": "string",
+                                    "menu": "colorMenu"
+                                }                                
+                            }
+                        },
                         {
                             "opcode": "setColor",
                             "blockType": "command",
@@ -21,6 +35,21 @@ class ScratchHome {
                                     "type": "string",
                                     "menu": "colorMenu"
                                 }                                
+                            }
+                        },
+                        {
+                            "opcode": "switchOnOff",
+                            "blockType": "command",
+                            "text": "[switchList] le/la [lamp]",
+                            "arguments": {
+                                "switchList": {
+                                    "type": "string",
+                                    "menu": "switchMenu"
+                                },
+                                "lamp": {
+                                    "type": "string",
+                                    "defaultValue":  "Suspension(296454286)"
+                                },
                             }
                         },
                         {
