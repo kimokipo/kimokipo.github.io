@@ -71,7 +71,7 @@ class ScratchHome {
     }
     /**
      * Get the current varScratch.
-     * @return {number} - the current varScratch, in beats per minute.
+     * @return {number} - the current varScratch.
      */
     getVarScratch () {
             return this.varScratch;
