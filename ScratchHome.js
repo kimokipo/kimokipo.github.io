@@ -1,9 +1,10 @@
 class ScratchHome {
-    static message = "vide";
+    static message = "empty";
+    static status = "empty";
     constructor() {
         this.socket = null;
         this.varScratch = "rien";
-        this.wsUrl = "ws://localhost:8080/WebSocketTest/ToUpperWebsocket";
+        this.wsUrl = "ws://localhost:8000";
         this.connect();
     }
     
@@ -16,7 +17,7 @@ class ScratchHome {
                 "arguments": {
                     "object": {
                         "type": "string",
-                        "defaultValue": "Lit bÃ©bÃ©(827158385)"
+                        "defaultValue": "Lit bébé(827158385)"
                     },
                     "colorList": {
                         "type": "string",
@@ -40,9 +41,14 @@ class ScratchHome {
                 }
             },
             {
-                "opcode": 'getVarScratch',
+                "opcode": 'getMessage',
                 "blockType": "reporter",
-                "text": "varScratch"
+                "text": "message"
+            },
+            {
+                "opcode": 'getStatus',
+                "blockType": "reporter",
+                "text": "status"
             }
         ];
     }
@@ -75,16 +81,17 @@ class ScratchHome {
         this.socket = new WebSocket(this.wsUrl);
   
         this.socket.onopen = function(event) {
-          ScratchHome.message = "Connected!";
+          ScratchHome.status = "Connected!";
         };
   
         this.socket.onmessage = function(event) {
-          console.log(event.data);
-          ScratchHome.message = event.data;
+            if (event.data){
+                ScratchHome.message = event.data;
+            } 
         };
   
         this.socket.onclose = function(event) {
-          ScratchHome.message = "Connection Closed";
+          ScratchHome.status = "Connection Closed";
         };
       }
   
@@ -97,20 +104,30 @@ class ScratchHome {
       }
   
       setColor({object,colorList}) {
+          this.connect();
           this.send("setColor/"+object+"/"+colorList);
       }
       
       switchOnOff({switchList,lamp}) {
+          this.connect();
           this.send("switchOnOff/"+switchList+"/"+lamp);
           
       }
       /**
-       * Get the current varScratch.
-       * @return {string} - the current varScratch.
+       * Get the current message.
+       * @return {string} - the current message.
        */
-      getVarScratch () {
+      getMessage () {
               return ScratchHome.message;
       }
+
+      /**
+       * Get the current status.
+       * @return {string} - the current status.
+       */
+       getStatus () {
+        return ScratchHome.status;
+}
 }
 
 Scratch.extensions.register(new ScratchHome())
