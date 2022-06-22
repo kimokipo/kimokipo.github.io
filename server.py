@@ -1,8 +1,7 @@
 import asyncio
 import websockets
 import jpysocket
-import socket
-import unidecode 
+import socket 
  
 # create handler for each connection
  
@@ -15,8 +14,7 @@ async def handler(websocket, path):
 	    s=socket.socket() #Create Socket
 	    s.connect((host,port)) #Connect to socket
 	    msgenv = f"GET /{data} HTTP/1"
-	    msgenvsansaccent = unidecode.unidecode(msgenv) 
-	    msgsend=jpysocket.jpyencode(msgenvsansaccent) #Encript The Msg
+	    msgsend=jpysocket.jpyencode(msgenv) #Encript The Msg
 	    s.send(msgsend) #Send Msg
 	    msgrecv=s.recv(1024) #Recieve msg
 	    msgrecv=jpysocket.jpydecode(msgrecv) #Decript msg
