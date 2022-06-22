@@ -55,7 +55,7 @@ class ScratchHome {
     
     getInfo() {
         return {
-            "id": "ScratchHome",
+            "id": "scratchhome",
             "name": "ScratchHome",
             "blocks": this.getblocks(),
             "menus":{
